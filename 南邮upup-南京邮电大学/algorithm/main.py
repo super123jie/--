@@ -36,8 +36,7 @@ _OUT_OF_SCOPE = re.compile(
     r"(天气|外卖|股市|股票|新闻|笑话|讲故事|聊天|你叫.*名字|订餐|订票|抢票|"
     r"翻译|下棋|打车|快递|支付|充值|理财|游戏|电影院)"
 )
-
-
+##aaa
 def _build_reply(intent: Intent, plan_steps, safety_verdicts, tool_results,
                  requires_conf: bool, home_state: dict) -> str:
     """生成给用户的自然语言回复。简单模板拼接，离线零依赖。"""

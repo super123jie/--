@@ -1,0 +1,13 @@
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+algorithm/data_local/
+algorithm/models/
+algorithm/tests/report.json
+.streamlit/
+*.egg-info/
+.idea/
+.vscode/

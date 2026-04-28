@@ -1,0 +1,47 @@
+{
+  "description": "HomeCare-Agent 示例输入/输出数据（用于离线评测与文档展示）",
+  "examples": [
+    {
+      "user_input": "我准备睡觉了，帮我把家里调整一下",
+      "expected_intent": "mode.sleep",
+      "expected_min_plan_steps": 5,
+      "comment": "睡眠模式：关灯/调温/拉帘/关电视，入户门锁需确认"
+    },
+    {
+      "user_input": "我要出门了",
+      "expected_intent": "mode.leave",
+      "expected_min_plan_steps": 5,
+      "comment": "离家模式：全屋断电，燃气总阀关闭需确认"
+    },
+    {
+      "user_input": "奶奶摔倒了",
+      "expected_intent": "care.fall_emergency",
+      "expected_min_plan_steps": 3,
+      "comment": "紧急场景：自动放行所有救援动作（全屋点亮、呼叫家属、解锁门）"
+    },
+    {
+      "user_input": "把客厅空调调到 24 度",
+      "expected_intent": "device.ac",
+      "expected_slot_value": 24,
+      "comment": "数值槽位精准抽取"
+    },
+    {
+      "user_input": "再低一点",
+      "expected_intent": "device.ac",
+      "expected_action": "down",
+      "comment": "多轮指代消解：依赖上一轮意图与槽位"
+    }
+  ],
+  "default_home_state": {
+    "rooms": ["客厅", "主卧", "次卧", "厨房", "儿童房"],
+    "default_devices": ["light", "ac", "curtain", "tv", "speaker"]
+  },
+  "default_user_profile": {
+    "members": ["爷爷", "奶奶", "爸爸", "妈妈", "小明"],
+    "preferences": {
+      "sleep_temp": 25.0,
+      "wake_temp": 24.0,
+      "preferred_light_brightness_night": 15
+    }
+  }
+}

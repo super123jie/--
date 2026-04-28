@@ -1,0 +1,502 @@
+[
+  {
+    "id": "intent_test_001",
+    "query": "我要睡觉了，帮我把家里调成睡眠模式",
+    "gold_intent": "sleep_mode"
+  },
+  {
+    "id": "intent_test_002",
+    "query": "晚安，关闭客厅灯并把卧室空调调舒服一点",
+    "gold_intent": "sleep_mode"
+  },
+  {
+    "id": "intent_test_003",
+    "query": "准备休息了，把卧室窗帘拉上",
+    "gold_intent": "sleep_mode"
+  },
+  {
+    "id": "intent_test_004",
+    "query": "我困了，帮我关灯并开启夜间安防",
+    "gold_intent": "sleep_mode"
+  },
+  {
+    "id": "intent_test_005",
+    "query": "进入睡眠模式，空调调到26度",
+    "gold_intent": "sleep_mode"
+  },
+  {
+    "id": "intent_test_006",
+    "query": "帮我把家里设置成晚上睡觉的状态",
+    "gold_intent": "sleep_mode"
+  },
+  {
+    "id": "intent_test_007",
+    "query": "我要上床了，客厅灯关掉，卧室灯调暗",
+    "gold_intent": "sleep_mode"
+  },
+  {
+    "id": "intent_test_008",
+    "query": "睡觉前帮我检查一下门窗并关灯",
+    "gold_intent": "sleep_mode"
+  },
+  {
+    "id": "intent_test_009",
+    "query": "帮我启动夜间模式，不要太亮",
+    "gold_intent": "sleep_mode"
+  },
+  {
+    "id": "intent_test_010",
+    "query": "现在休息，关闭电视和客厅灯",
+    "gold_intent": "sleep_mode"
+  },
+  {
+    "id": "intent_test_011",
+    "query": "我要出门了，帮我检查一下家里",
+    "gold_intent": "leave_home_mode"
+  },
+  {
+    "id": "intent_test_012",
+    "query": "离家模式开启，关闭不必要设备",
+    "gold_intent": "leave_home_mode"
+  },
+  {
+    "id": "intent_test_013",
+    "query": "我去上课了，把灯和空调都关掉",
+    "gold_intent": "leave_home_mode"
+  },
+  {
+    "id": "intent_test_014",
+    "query": "出门前帮我确认门窗和燃气安全",
+    "gold_intent": "leave_home_mode"
+  },
+  {
+    "id": "intent_test_015",
+    "query": "家里没人了，开启安防模式",
+    "gold_intent": "leave_home_mode"
+  },
+  {
+    "id": "intent_test_016",
+    "query": "我要离开家，帮我锁门并关闭客厅灯",
+    "gold_intent": "leave_home_mode"
+  },
+  {
+    "id": "intent_test_017",
+    "query": "帮我执行外出模式",
+    "gold_intent": "leave_home_mode"
+  },
+  {
+    "id": "intent_test_018",
+    "query": "上班去了，家里设备该关的都关掉",
+    "gold_intent": "leave_home_mode"
+  },
+  {
+    "id": "intent_test_019",
+    "query": "我出门十分钟后还没回来就开启安防",
+    "gold_intent": "leave_home_mode"
+  },
+  {
+    "id": "intent_test_020",
+    "query": "离家前帮我检查厨房燃气",
+    "gold_intent": "leave_home_mode"
+  },
+  {
+    "id": "intent_test_021",
+    "query": "我快到家了，提前打开客厅灯",
+    "gold_intent": "return_home_mode"
+  },
+  {
+    "id": "intent_test_022",
+    "query": "我回来了，帮我打开玄关灯",
+    "gold_intent": "return_home_mode"
+  },
+  {
+    "id": "intent_test_023",
+    "query": "到家模式启动，把空调调到26度",
+    "gold_intent": "return_home_mode"
+  },
+  {
+    "id": "intent_test_024",
+    "query": "我还有五分钟到家，先把客厅空调打开",
+    "gold_intent": "return_home_mode"
+  },
+  {
+    "id": "intent_test_025",
+    "query": "回家了，关闭安防并打开客厅灯",
+    "gold_intent": "return_home_mode"
+  },
+  {
+    "id": "intent_test_026",
+    "query": "帮我设置回家模式",
+    "gold_intent": "return_home_mode"
+  },
+  {
+    "id": "intent_test_027",
+    "query": "我进门了，把窗帘打开",
+    "gold_intent": "return_home_mode"
+  },
+  {
+    "id": "intent_test_028",
+    "query": "马上到家，帮我把室内温度调舒服",
+    "gold_intent": "return_home_mode"
+  },
+  {
+    "id": "intent_test_029",
+    "query": "我回家了，打开热水器和客厅灯",
+    "gold_intent": "return_home_mode"
+  },
+  {
+    "id": "intent_test_030",
+    "query": "检测到我到家，执行回家场景",
+    "gold_intent": "return_home_mode"
+  },
+  {
+    "id": "intent_test_031",
+    "query": "我要看电影了，把灯调暗一点",
+    "gold_intent": "movie_mode"
+  },
+  {
+    "id": "intent_test_032",
+    "query": "开启观影模式，关上窗帘",
+    "gold_intent": "movie_mode"
+  },
+  {
+    "id": "intent_test_033",
+    "query": "看电视的时候帮我把客厅灯调到20%",
+    "gold_intent": "movie_mode"
+  },
+  {
+    "id": "intent_test_034",
+    "query": "准备追剧，关闭主灯，打开氛围灯",
+    "gold_intent": "movie_mode"
+  },
+  {
+    "id": "intent_test_035",
+    "query": "帮我设置影院模式",
+    "gold_intent": "movie_mode"
+  },
+  {
+    "id": "intent_test_036",
+    "query": "我要看投影，拉上客厅窗帘",
+    "gold_intent": "movie_mode"
+  },
+  {
+    "id": "intent_test_037",
+    "query": "电影开始了，把音箱调到合适音量",
+    "gold_intent": "movie_mode"
+  },
+  {
+    "id": "intent_test_038",
+    "query": "进入观影场景，灯光暗一些",
+    "gold_intent": "movie_mode"
+  },
+  {
+    "id": "intent_test_039",
+    "query": "帮我把客厅调整成看电影的环境",
+    "gold_intent": "movie_mode"
+  },
+  {
+    "id": "intent_test_040",
+    "query": "打开电视并关闭客厅大灯",
+    "gold_intent": "movie_mode"
+  },
+  {
+    "id": "intent_test_041",
+    "query": "帮我开启节能模式",
+    "gold_intent": "energy_saving_mode"
+  },
+  {
+    "id": "intent_test_042",
+    "query": "今天电费有点高，减少家里耗电",
+    "gold_intent": "energy_saving_mode"
+  },
+  {
+    "id": "intent_test_043",
+    "query": "把不用的设备都关掉，省点电",
+    "gold_intent": "energy_saving_mode"
+  },
+  {
+    "id": "intent_test_044",
+    "query": "开启低功耗家庭模式",
+    "gold_intent": "energy_saving_mode"
+  },
+  {
+    "id": "intent_test_045",
+    "query": "帮我优化一下家里的用电",
+    "gold_intent": "energy_saving_mode"
+  },
+  {
+    "id": "intent_test_046",
+    "query": "空调不要太耗电，调到节能状态",
+    "gold_intent": "energy_saving_mode"
+  },
+  {
+    "id": "intent_test_047",
+    "query": "现在进入省电模式",
+    "gold_intent": "energy_saving_mode"
+  },
+  {
+    "id": "intent_test_048",
+    "query": "帮我关闭待机设备",
+    "gold_intent": "energy_saving_mode"
+  },
+  {
+    "id": "intent_test_049",
+    "query": "减少客厅设备能耗",
+    "gold_intent": "energy_saving_mode"
+  },
+  {
+    "id": "intent_test_050",
+    "query": "帮我做一次家庭能耗优化",
+    "gold_intent": "energy_saving_mode"
+  },
+  {
+    "id": "intent_test_051",
+    "query": "帮我检查家里是否安全",
+    "gold_intent": "security_check"
+  },
+  {
+    "id": "intent_test_052",
+    "query": "看看门锁有没有锁好",
+    "gold_intent": "security_check"
+  },
+  {
+    "id": "intent_test_053",
+    "query": "检查一下厨房燃气是否正常",
+    "gold_intent": "security_check"
+  },
+  {
+    "id": "intent_test_054",
+    "query": "帮我确认窗户都关上了吗",
+    "gold_intent": "security_check"
+  },
+  {
+    "id": "intent_test_055",
+    "query": "开启家庭安防巡检",
+    "gold_intent": "security_check"
+  },
+  {
+    "id": "intent_test_056",
+    "query": "现在家里有没有异常情况",
+    "gold_intent": "security_check"
+  },
+  {
+    "id": "intent_test_057",
+    "query": "检查摄像头和门锁状态",
+    "gold_intent": "security_check"
+  },
+  {
+    "id": "intent_test_058",
+    "query": "帮我看看门窗有没有没关的",
+    "gold_intent": "security_check"
+  },
+  {
+    "id": "intent_test_059",
+    "query": "晚上帮我启动安全检查",
+    "gold_intent": "security_check"
+  },
+  {
+    "id": "intent_test_060",
+    "query": "确认一下阳台窗户有没有关好",
+    "gold_intent": "security_check"
+  },
+  {
+    "id": "intent_test_061",
+    "query": "提醒奶奶晚上八点吃药",
+    "gold_intent": "elderly_care"
+  },
+  {
+    "id": "intent_test_062",
+    "query": "帮我看看爷爷今天有没有按时喝水",
+    "gold_intent": "elderly_care"
+  },
+  {
+    "id": "intent_test_063",
+    "query": "开启老人关怀模式",
+    "gold_intent": "elderly_care"
+  },
+  {
+    "id": "intent_test_064",
+    "query": "晚上提醒老人不要把空调开太低",
+    "gold_intent": "elderly_care"
+  },
+  {
+    "id": "intent_test_065",
+    "query": "给奶奶设置血压测量提醒",
+    "gold_intent": "elderly_care"
+  },
+  {
+    "id": "intent_test_066",
+    "query": "爷爷起夜时自动开小夜灯",
+    "gold_intent": "elderly_care"
+  },
+  {
+    "id": "intent_test_067",
+    "query": "帮我关注老人房间温度",
+    "gold_intent": "elderly_care"
+  },
+  {
+    "id": "intent_test_068",
+    "query": "提醒老人睡前关好门窗",
+    "gold_intent": "elderly_care"
+  },
+  {
+    "id": "intent_test_069",
+    "query": "老人房间如果太冷就提醒我",
+    "gold_intent": "elderly_care"
+  },
+  {
+    "id": "intent_test_070",
+    "query": "帮奶奶设置明早七点吃药提醒",
+    "gold_intent": "elderly_care"
+  },
+  {
+    "id": "intent_test_071",
+    "query": "孩子要写作业了，开启学习模式",
+    "gold_intent": "child_learning"
+  },
+  {
+    "id": "intent_test_072",
+    "query": "帮我把儿童房灯光调亮一点",
+    "gold_intent": "child_learning"
+  },
+  {
+    "id": "intent_test_073",
+    "query": "开启儿童学习陪伴",
+    "gold_intent": "child_learning"
+  },
+  {
+    "id": "intent_test_074",
+    "query": "孩子看书时不要让电视打开",
+    "gold_intent": "child_learning"
+  },
+  {
+    "id": "intent_test_075",
+    "query": "设置半小时后提醒孩子休息眼睛",
+    "gold_intent": "child_learning"
+  },
+  {
+    "id": "intent_test_076",
+    "query": "帮我安排孩子的英语学习提醒",
+    "gold_intent": "child_learning"
+  },
+  {
+    "id": "intent_test_077",
+    "query": "儿童房进入安静学习模式",
+    "gold_intent": "child_learning"
+  },
+  {
+    "id": "intent_test_078",
+    "query": "孩子上网课了，把客厅音箱关小",
+    "gold_intent": "child_learning"
+  },
+  {
+    "id": "intent_test_079",
+    "query": "学习模式下关闭游戏设备",
+    "gold_intent": "child_learning"
+  },
+  {
+    "id": "intent_test_080",
+    "query": "提醒孩子九点半准备睡觉",
+    "gold_intent": "child_learning"
+  },
+  {
+    "id": "intent_test_081",
+    "query": "家里有点热，帮我调舒服一点",
+    "gold_intent": "environment_adjustment"
+  },
+  {
+    "id": "intent_test_082",
+    "query": "客厅太暗了，开点灯",
+    "gold_intent": "environment_adjustment"
+  },
+  {
+    "id": "intent_test_083",
+    "query": "空气有点闷，打开新风",
+    "gold_intent": "environment_adjustment"
+  },
+  {
+    "id": "intent_test_084",
+    "query": "卧室湿度太高了，帮我处理一下",
+    "gold_intent": "environment_adjustment"
+  },
+  {
+    "id": "intent_test_085",
+    "query": "有点冷，把空调调高一点",
+    "gold_intent": "environment_adjustment"
+  },
+  {
+    "id": "intent_test_086",
+    "query": "室内空气不好，开空气净化器",
+    "gold_intent": "environment_adjustment"
+  },
+  {
+    "id": "intent_test_087",
+    "query": "阳光太强了，把窗帘拉上一些",
+    "gold_intent": "environment_adjustment"
+  },
+  {
+    "id": "intent_test_088",
+    "query": "晚上有点干，打开加湿器",
+    "gold_intent": "environment_adjustment"
+  },
+  {
+    "id": "intent_test_089",
+    "query": "客厅太亮了，把灯光调柔和",
+    "gold_intent": "environment_adjustment"
+  },
+  {
+    "id": "intent_test_090",
+    "query": "房间里有点吵，降低音箱音量",
+    "gold_intent": "environment_adjustment"
+  },
+  {
+    "id": "intent_test_091",
+    "query": "打开卧室灯",
+    "gold_intent": "device_control"
+  },
+  {
+    "id": "intent_test_092",
+    "query": "关闭客厅空调",
+    "gold_intent": "device_control"
+  },
+  {
+    "id": "intent_test_093",
+    "query": "把厨房灯关掉",
+    "gold_intent": "device_control"
+  },
+  {
+    "id": "intent_test_094",
+    "query": "卧室空调调到25度",
+    "gold_intent": "device_control"
+  },
+  {
+    "id": "intent_test_095",
+    "query": "打开扫地机器人",
+    "gold_intent": "device_control"
+  },
+  {
+    "id": "intent_test_096",
+    "query": "关闭电视",
+    "gold_intent": "device_control"
+  },
+  {
+    "id": "intent_test_097",
+    "query": "把书房窗帘打开",
+    "gold_intent": "device_control"
+  },
+  {
+    "id": "intent_test_098",
+    "query": "客厅音箱音量调到30%",
+    "gold_intent": "device_control"
+  },
+  {
+    "id": "intent_test_099",
+    "query": "关闭阳台灯",
+    "gold_intent": "device_control"
+  },
+  {
+    "id": "intent_test_100",
+    "query": "打开空气净化器",
+    "gold_intent": "device_control"
+  }
+]

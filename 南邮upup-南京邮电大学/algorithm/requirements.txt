@@ -1,0 +1,12 @@
+streamlit>=1.32
+streamlit-mic-recorder>=0.0.8
+numpy>=1.26,<3.0
+scikit-learn>=1.4
+jsonschema>=4.21
+psutil>=5.9
+jieba>=0.42.1
+pydantic>=2.6
+# 端侧 LLM 增强（嵌入式语义意图匹配）。模型已预下载到 algorithm/models/embedder/。
+sentence-transformers>=3.0
+torch>=2.2
+transformers>=4.40

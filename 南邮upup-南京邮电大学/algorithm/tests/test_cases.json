@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "description": "HomeCare-Agent 测试集（≥40条），分桶覆盖六类场景。",
+  "buckets": {
+    "single_intent": [
+      {"input": "把客厅灯打开", "expected_intent": "device.light", "expected_action": "on"},
+      {"input": "卧室灯关一下", "expected_intent": "device.light", "expected_action": "off"},
+      {"input": "空调调到 26 度", "expected_intent": "device.ac", "expected_value": 26},
+      {"input": "拉上客厅窗帘", "expected_intent": "device.curtain"},
+      {"input": "打开电视", "expected_intent": "device.tv"},
+      {"input": "放点轻音乐", "expected_intent": "device.speaker"},
+      {"input": "让扫地机干活", "expected_intent": "device.robot_cleaner"},
+      {"input": "把入户门锁了", "expected_intent": "device.lock"},
+      {"input": "关闭燃气总阀", "expected_intent": "device.gas_valve"},
+      {"input": "客厅亮度调高一点", "expected_intent": "device.light", "expected_action": "up"}
+    ],
+    "compound_multi_step": [
+      {"input": "我准备睡觉了，帮我把家里调整一下", "expected_intent": "mode.sleep", "min_plan_steps": 5},
+      {"input": "我要出门了", "expected_intent": "mode.leave", "min_plan_steps": 5},
+      {"input": "我刚到家", "expected_intent": "mode.home", "min_plan_steps": 3},
+      {"input": "启动节能模式", "expected_intent": "mode.energy_save"},
+      {"input": "聚会模式", "expected_intent": "mode.party", "min_plan_steps": 3},
+      {"input": "晚安", "expected_intent": "mode.sleep", "min_plan_steps": 5},
+      {"input": "整个家进入休息状态", "expected_intent": "mode.sleep", "min_plan_steps": 5},
+      {"input": "全部关掉我要外出", "expected_intent": "mode.leave"},
+      {"input": "回家了客厅灯亮起", "expected_intent": "mode.home"},
+      {"input": "省电模式", "expected_intent": "mode.energy_save"}
+    ],
+    "ambiguous": [
+      {"input": "有点冷", "expected_intent": "device.ac", "fallback_intents": ["unknown"]},
+      {"input": "光线太暗", "expected_intent": "device.light", "fallback_intents": ["unknown"]},
+      {"input": "太吵了", "expected_intent": "device.speaker", "fallback_intents": ["unknown"]},
+      {"input": "我累了", "expected_intent": "mode.sleep", "fallback_intents": ["unknown"]},
+      {"input": "调一下温度", "expected_intent": "device.ac"}
+    ],
+    "high_risk": [
+      {"input": "关掉燃气", "expected_intent": "device.gas_valve", "expected_requires_confirmation": true},
+      {"input": "解锁入户门", "expected_intent": "device.lock", "expected_requires_confirmation": true},
+      {"input": "把家里电闸切了", "expected_intent": "unknown", "fallback_intents": ["mode.energy_save"]},
+      {"input": "燃气阀打开", "expected_intent": "device.gas_valve", "expected_requires_confirmation": true},
+      {"input": "开门", "expected_intent": "device.lock", "expected_requires_confirmation": true}
+    ],
+    "multi_turn_context": [
+      {"input": "把客厅空调调到 26 度", "expected_intent": "device.ac"},
+      {"input": "再低一点", "expected_intent": "device.ac", "expected_action": "down", "use_prior_session": true},
+      {"input": "卧室也是", "expected_intent": "device.ac", "use_prior_session": true},
+      {"input": "确认", "expected_intent": "dialog.confirm"},
+      {"input": "取消", "expected_intent": "dialog.cancel"}
+    ],
+    "out_of_scope": [
+      {"input": "今天股市怎么样", "expected_intent": "unknown"},
+      {"input": "讲个笑话", "expected_intent": "unknown"},
+      {"input": "明天天气如何", "expected_intent": "unknown"},
+      {"input": "帮我订外卖", "expected_intent": "unknown"},
+      {"input": "你叫什么名字", "expected_intent": "unknown"}
+    ],
+    "care_scenarios": [
+      {"input": "奶奶摔倒了", "expected_intent": "care.fall_emergency", "min_plan_steps": 3},
+      {"input": "提醒爷爷吃药", "expected_intent": "care.medicine_remind"},
+      {"input": "看看小明写作业了吗", "expected_intent": "care.child_study_check"},
+      {"input": "夜里陪伴奶奶", "expected_intent": "care.night_companion"},
+      {"input": "有人摔了快帮忙", "expected_intent": "care.fall_emergency"}
+    ],
+    "open_natural_language": [
+      {"input": "我累瘫了想躺会", "expected_intent": "mode.sleep", "fallback_intents": ["unknown"]},
+      {"input": "马上要出门别忘了关灯", "expected_intent": "mode.leave", "fallback_intents": ["unknown"]},
+      {"input": "刚到楼下马上进门", "expected_intent": "mode.home", "fallback_intents": ["unknown"]},
+      {"input": "客厅有点闷", "expected_intent": "device.ac", "fallback_intents": ["unknown"]},
+      {"input": "音乐声音太大了", "expected_intent": "device.speaker", "fallback_intents": ["unknown"]},
+      {"input": "把那个帘子合上吧", "expected_intent": "device.curtain", "fallback_intents": ["unknown"]},
+      {"input": "今天派对气氛要起来", "expected_intent": "mode.party", "fallback_intents": ["unknown"]},
+      {"input": "电费有点高想省点", "expected_intent": "mode.energy_save", "fallback_intents": ["unknown"]}
+    ],
+    "real_user_challenge": [
+      {"input": "客厅太黑了", "expected_intent": "device.light", "fallback_intents": ["unknown"]},
+      {"input": "屋里太闷了", "expected_intent": "device.ac", "fallback_intents": ["unknown"]},
+      {"input": "声音有点吵", "expected_intent": "device.speaker", "fallback_intents": ["unknown"]},
+      {"input": "睡觉模式但别锁门", "expected_intent": "mode.sleep", "expect_no_tool": "control_door_lock"},
+      {"input": "打开客厅灯，不要开电视", "expected_intent": "device.light", "expect_no_tool": "control_tv"},
+      {"input": "厨房闻到煤气味了", "expected_intent": "safety.gas_leak", "min_plan_steps": 3},
+      {"input": "怀疑燃气泄漏快帮忙", "expected_intent": "safety.gas_leak", "min_plan_steps": 3},
+      {"input": "爷爷半天叫不应", "expected_intent": "safety.elder_no_response", "min_plan_steps": 2},
+      {"input": "孩子一个人在家", "expected_intent": "safety.child_alone", "min_plan_steps": 2},
+      {"input": "夜里有陌生人开门", "expected_intent": "safety.night_intrusion", "min_plan_steps": 2},
+      {"input": "空调开到二十六度", "expected_intent": "device.ac", "expected_value": 26},
+      {"input": "空调调到十五度", "expected_intent": "device.ac", "expected_warning": true},
+      {"input": "灯亮度调到一百二", "expected_intent": "device.light", "expected_warning": true}
+    ],
+    "compound_commands": [
+      {"input": "打开厨房灯和客厅空调到26度", "expected_intent": "device.light", "min_plan_steps": 2},
+      {"input": "把客厅窗帘拉开，再开一下电视", "expected_intent": "device.curtain", "min_plan_steps": 2}
+    ]
+  }
+}

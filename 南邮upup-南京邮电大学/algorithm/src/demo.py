@@ -212,12 +212,16 @@ ICONS = {
     "light": "💡", "ac": "❄️", "curtain": "🪟",
     "tv": "📺", "speaker": "🔊", "lock": "🔐",
     "robot_cleaner": "🤖", "gas_valve": "🔥",
+    "air_purifier": "🌬️", "humidifier": "💧",
+    "fresh_air": "🌀", "water_heater": "♨️",
 }
 
 CN_NAMES = {
     "light": "灯", "ac": "空调", "curtain": "窗帘",
     "tv": "电视", "speaker": "音响", "lock": "门锁",
     "robot_cleaner": "扫地机", "gas_valve": "燃气阀",
+    "air_purifier": "空气净化器", "humidifier": "加湿器",
+    "fresh_air": "新风", "water_heater": "热水器",
 }
 
 
@@ -227,7 +231,7 @@ def _device_tile_html(name: str, info: dict) -> str:
     on = info.get("power") == "on" or info.get("status") in ("opened", "unlocked", "start")
     klass = "on" if on else "off"
     if name == "ac":
-        meta = f"{info.get('temp', '-') }℃ · {info.get('mode', 'auto')}"
+        meta = f"{info.get('temp', '-')}℃ · {info.get('mode', 'auto')}"
     elif name == "light":
         meta = f"{info.get('brightness', 0)}%"
     elif name == "curtain":
@@ -235,9 +239,21 @@ def _device_tile_html(name: str, info: dict) -> str:
     elif name == "tv":
         meta = "ON" if on else "OFF"
     elif name == "speaker":
-        meta = info.get("playlist", "—")
+        playlist = info.get("playlist") or ""
+        meta = (playlist if (on and playlist) else ("ON" if on else "OFF"))
+    elif name == "air_purifier":
+        meta = f"{'ON' if on else 'OFF'} · {info.get('speed', 'auto')}"
+    elif name == "humidifier":
+        th = info.get("target_humidity")
+        meta = f"{'ON' if on else 'OFF'}" + (f" · 目标 {th}%" if th is not None else "")
+    elif name == "fresh_air":
+        meta = f"{'ON' if on else 'OFF'} · {info.get('level', 'mid')}档"
+    elif name == "water_heater":
+        t = info.get("temperature")
+        meta = f"{'ON' if on else 'OFF'}" + (f" · {t}℃" if t is not None else "")
     else:
-        meta = json.dumps(info, ensure_ascii=False)[:30]
+        # 兜底：仅显示开关状态，避免把整个 dict 撕碎到 UI 上
+        meta = "ON" if on else "OFF"
     return (f"<div class='device-tile {klass}'>"
             f"<span class='device-name'>{icon} {cn}</span>"
             f"<span class='device-meta'>{meta}</span></div>")
@@ -363,17 +379,25 @@ with st.sidebar:
         "🌙 睡觉": "我准备睡觉了，帮我把家里调整一下",
         "🚪 离家": "我要出门了",
         "🏡 回家": "我刚到家",
+        "🎬 观影": "我要看电影了，把灯调暗一点",
+        "📚 学习": "孩子要写作业了，开启学习模式",
         "🎉 聚会": "聚会模式",
         "🔋 节能": "启动节能模式",
+        "🛡️ 安全巡检": "帮我检查家里是否安全",
+        "🌬️ 净化器": "打开空气净化器",
+        "💧 加湿器": "晚上有点干，打开加湿器",
         "🧓 老人摔倒": "奶奶摔倒了！",
         "💊 提醒吃药": "提醒爷爷吃降压药",
-        "📚 检查作业": "看看小明写作业了吗",
         "🔥 煤气泄漏": "厨房闻到煤气味了",
         "👶 孩子独自": "孩子一个人在家",
     }
+    # 快捷按钮：点击直接运行 Agent 并刷新页面，不依赖 text_input value
+    # （带 key 的 text_input 会忽略 value 参数，必须直接 rerun）
     for label, text in quick.items():
         if st.button(label, use_container_width=True, key=f"q_{label}"):
-            st.session_state.pending_input = text
+            out = run(text, session_id=st.session_state.sid)
+            st.session_state.history.append(out)
+            st.rerun()
 
     st.markdown("---")
     st.markdown("### 🔒 端侧 & 隐私")

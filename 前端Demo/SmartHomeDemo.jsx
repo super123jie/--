@@ -1,0 +1,908 @@
+/**
+ * 智能家居 Demo · 单文件 React 组件
+ *
+ * 依赖：React 18、Tailwind CSS、lucide-react、framer-motion
+ *
+ * 设计要点：
+ * 1. parseCommand：纯文本 → {room, device, action, value}[]，支持中文数字、复合句
+ * 2. decideSafety：返回 'low' | 'medium' | 'high'
+ *    - 解锁入户门 → medium（需用户二次确认）
+ *    - 打开燃气阀 → high（必须确认）
+ *    - 其它 → low（直接执行）
+ * 3. executeAction：纯函数 (state, action) → 新 state
+ * 4. House3D：CSS perspective + rotateX/rotateZ 模拟等距 3D 房屋
+ * 5. RoomCard：玻璃拟态卡片，仅展示，不作为控制入口
+ * 6. 所有状态在 useState 中管理，无后端 API
+ */
+
+import React, { useState, useCallback, useMemo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Lightbulb, Wind, Tv, Speaker, AirVent, Droplets, Bot,
+  Lock, Unlock, Flame, Home, Send, CheckCircle2, XCircle,
+  AlertTriangle, Sparkles, Activity, Mic, Sun, Moon,
+} from "lucide-react";
+
+// ============================================================
+// 一、初始家庭状态
+// ============================================================
+const INITIAL_STATE = {
+  rooms: {
+    主卧:  { light:{power:"off",brightness:0}, ac:{power:"off",temp:26,mode:"auto"}, curtain:{status:"opened"} },
+    次卧:  { light:{power:"off",brightness:0}, ac:{power:"off",temp:26,mode:"auto"} },
+    客厅:  { light:{power:"off",brightness:0}, ac:{power:"off",temp:26,mode:"auto"}, curtain:{status:"opened"}, tv:{power:"off"}, speaker:{power:"off",playlist:""} },
+    儿童房:{ light:{power:"off",brightness:0}, ac:{power:"off",temp:26,mode:"auto"} },
+    厨房:  { light:{power:"off",brightness:0}, airPurifier:{power:"off",speed:"auto"}, humidifier:{power:"off"} },
+  },
+  doorLock:    { status:"locked" },
+  gasValve:    { status:"closed" },
+  robotCleaner:{ status:"stop" },
+};
+
+// ============================================================
+// 二、词典（中文 → 内部标识）
+// ============================================================
+const ROOM_KEYWORDS = ["客厅", "主卧", "次卧", "儿童房", "厨房"];
+
+const DEVICE_MAP = [
+  // 顺序敏感：长串先匹配，避免"灯"先吃掉"灯光"
+  ["扫地机器人","robotCleaner"],["扫地机","robotCleaner"],
+  ["空气净化器","airPurifier"],["净化器","airPurifier"],
+  ["加湿器","humidifier"],
+  ["燃气阀","gasValve"],["燃气","gasValve"],["煤气","gasValve"],
+  ["入户门","doorLock"],["门锁","doorLock"],["大门","doorLock"],
+  ["窗帘","curtain"],["帘子","curtain"],
+  ["电视机","tv"],["电视","tv"],
+  ["音响","speaker"],["音箱","speaker"],["音乐","speaker"],
+  ["空调","ac"],["AC","ac"],["冷气","ac"],
+  ["灯光","light"],["灯","light"],["照明","light"],
+  ["门","doorLock"],
+];
+
+// ============================================================
+// 三、中文数字 → 阿拉伯数字（覆盖 0-99）
+// ============================================================
+function parseChineseNumber(s) {
+  if (s == null) return null;
+  s = String(s).trim();
+  if (/^\d+(\.\d+)?$/.test(s)) return parseFloat(s);
+  const map = {零:0,一:1,二:2,两:2,三:3,四:4,五:5,六:6,七:7,八:8,九:9};
+  if (s === "半") return 0.5;
+  if (s === "十") return 10;
+  if (s.length === 2 && s[0] === "十") return 10 + (map[s[1]] ?? 0);
+  if (s.length === 2 && s[1] === "十") return (map[s[0]] ?? 1) * 10;
+  if (s.length === 3 && s[1] === "十") return (map[s[0]] ?? 1) * 10 + (map[s[2]] ?? 0);
+  let n = 0;
+  for (const ch of s) {
+    if (map[ch] != null) n = n * 10 + map[ch];
+    else return null;
+  }
+  return n > 0 ? n : null;
+}
+
+// ============================================================
+// 四、parseCommand：自然语言 → action 列表
+// 输出 [{room, device, action, value, raw}]
+// ============================================================
+export function parseCommand(text) {
+  if (!text) return [];
+  const t = text.trim();
+
+  // 找设备
+  let device = null;
+  for (const [zh, en] of DEVICE_MAP) {
+    if (t.includes(zh)) { device = en; break; }
+  }
+
+  // 找房间
+  let room = null;
+  for (const r of ROOM_KEYWORDS) {
+    if (t.includes(r)) { room = r; break; }
+  }
+
+  // 找数值（中文或阿拉伯，附带可选单位）
+  let value = null;
+  const numMatch = t.match(/([零一二两三四五六七八九十百半]+|\d+(?:\.\d+)?)\s*(?:度|℃|°C|%|百分)?/);
+  if (numMatch) {
+    const raw = numMatch[1];
+    if (/[一二两三四五六七八九十百半零]/.test(raw) || /^\d/.test(raw)) {
+      const v = parseChineseNumber(raw);
+      if (v !== null) value = v;
+    }
+  }
+
+  // 找动作
+  let action = null;
+  if (/(调到|设为|设置为|定为)/.test(t)) action = "set";
+  else if (/(调高|升高|升|调亮|高一点|亮一点)/.test(t)) action = "up";
+  else if (/(调低|降低|降|调暗|低一点|暗一点|减低|减少)/.test(t)) action = "down";
+  else if (/(关闭|关掉|关上|关\b|关$|停止|停下|停\b)/.test(t)) action = "off";
+  else if (/(开启|打开|启动|开\b|开始)/.test(t) && !/(不开|别开|不要开)/.test(t)) action = "on";
+  if (action === null && value !== null) action = "set";
+
+  // 特殊设备的动作映射
+  if (device === "doorLock") {
+    if (/(解锁|开锁|开门)/.test(t)) action = "unlock";
+    else if (/(锁门|上锁|关门|锁\b|锁$)/.test(t)) action = "lock";
+  }
+  if (device === "gasValve") {
+    if (action === "off") action = "close";
+    if (action === "on") action = "open";
+  }
+  if (device === "robotCleaner") {
+    if (action === "on" || /(开始|出发)/.test(t)) action = "start";
+    if (action === "off") action = "stop";
+  }
+
+  if (!device || !action) return [];
+
+  return [{ room, device, action, value, raw: t }];
+}
+
+// ============================================================
+// 五、decideSafety：返回 'low' | 'medium' | 'high'
+// ============================================================
+export function decideSafety(action) {
+  if (action.device === "gasValve" && action.action === "open") return "high";
+  if (action.device === "doorLock" && action.action === "unlock") return "medium";
+  return "low";
+}
+
+// ============================================================
+// 六、executeAction：纯函数 (state, action) → 新 state
+// ============================================================
+export function executeAction(state, action) {
+  const ns = JSON.parse(JSON.stringify(state));
+  const { room, device, action: act, value } = action;
+
+  // 全屋设备
+  if (device === "doorLock") {
+    ns.doorLock.status = act === "unlock" ? "unlocked" : "locked";
+    return ns;
+  }
+  if (device === "gasValve") {
+    ns.gasValve.status = act === "open" ? "open" : "closed";
+    return ns;
+  }
+  if (device === "robotCleaner") {
+    ns.robotCleaner.status = act === "start" ? "start" : "stop";
+    return ns;
+  }
+
+  if (!room) return ns; // 没有房间无法定位
+  const r = ns.rooms[room];
+  if (!r) return ns;
+  const dev = r[device];
+  if (!dev) return ns;
+
+  // 灯
+  if (device === "light") {
+    if (act === "on")        { dev.power = "on";  if (!dev.brightness) dev.brightness = 80; }
+    else if (act === "off")  { dev.power = "off"; dev.brightness = 0; }
+    else if (act === "set")  { const v = Math.max(0, Math.min(100, value ?? 80));
+                                dev.brightness = v; dev.power = v > 0 ? "on" : "off"; }
+    else if (act === "up")   { dev.brightness = Math.min(100, dev.brightness + (value ?? 20)); dev.power = "on"; }
+    else if (act === "down") { dev.brightness = Math.max(0,   dev.brightness - (value ?? 20));
+                                dev.power = dev.brightness > 0 ? "on" : "off"; }
+  }
+  // 空调
+  else if (device === "ac") {
+    if (act === "on")        dev.power = "on";
+    else if (act === "off")  dev.power = "off";
+    else if (act === "set")  { dev.power = "on"; dev.temp = Math.max(16, Math.min(30, value ?? dev.temp)); }
+    else if (act === "up")   { dev.power = "on"; dev.temp = Math.max(16, Math.min(30, dev.temp + (value ?? 1))); }
+    else if (act === "down") { dev.power = "on"; dev.temp = Math.max(16, Math.min(30, dev.temp - (value ?? 1))); }
+  }
+  // 窗帘
+  else if (device === "curtain") {
+    dev.status = (act === "on" || act === "open") ? "opened" : "closed";
+  }
+  // 电视
+  else if (device === "tv") {
+    dev.power = act === "on" ? "on" : "off";
+  }
+  // 音响
+  else if (device === "speaker") {
+    dev.power = act === "on" ? "on" : "off";
+    if (act === "on" && !dev.playlist) dev.playlist = "舒缓音乐";
+  }
+  // 空气净化器
+  else if (device === "airPurifier") {
+    dev.power = act === "on" ? "on" : "off";
+  }
+  // 加湿器
+  else if (device === "humidifier") {
+    dev.power = act === "on" ? "on" : "off";
+  }
+
+  return ns;
+}
+
+// ============================================================
+// 七、显示辅助：把 state.devices 转成 卡片字符串
+// ============================================================
+function formatDevice(name, dev) {
+  if (!dev) return "—";
+  switch (name) {
+    case "light":       return `${dev.brightness ?? 0}%`;
+    case "ac":          return dev.power === "on" ? `${(dev.temp ?? 26).toFixed(1)}°C · ${dev.mode ?? "auto"}` : "OFF";
+    case "curtain":     return dev.status ?? "opened";
+    case "tv":          return dev.power === "on" ? "ON" : "OFF";
+    case "speaker":     return dev.power === "on" ? (dev.playlist || "ON") : "OFF";
+    case "airPurifier": return dev.power === "on" ? `ON · ${dev.speed ?? "auto"}` : "OFF";
+    case "humidifier":  return dev.power === "on" ? "ON" : "OFF";
+    default: return "—";
+  }
+}
+
+const DEVICE_CN = {
+  light: "灯", ac: "空调", curtain: "窗帘", tv: "电视",
+  speaker: "音响", airPurifier: "空气净化器", humidifier: "加湿器",
+  doorLock: "入户门", gasValve: "燃气阀", robotCleaner: "扫地机",
+};
+
+const DEVICE_ICON = {
+  light: Lightbulb, ac: Wind, curtain: Sun, tv: Tv,
+  speaker: Speaker, airPurifier: AirVent, humidifier: Droplets,
+  doorLock: Lock, gasValve: Flame, robotCleaner: Bot,
+};
+
+// ============================================================
+// 八、设备「亮起」判断（用于卡片高亮 + 房屋光晕）
+// ============================================================
+function isDeviceActive(name, dev) {
+  if (!dev) return false;
+  if (name === "light")    return (dev.brightness ?? 0) > 0;
+  if (name === "ac")       return dev.power === "on";
+  if (name === "tv")       return dev.power === "on";
+  if (name === "speaker")  return dev.power === "on";
+  if (name === "airPurifier") return dev.power === "on";
+  if (name === "humidifier")  return dev.power === "on";
+  if (name === "curtain")  return dev.status === "opened";
+  if (name === "doorLock") return dev.status === "unlocked";
+  if (name === "gasValve") return dev.status === "open";
+  if (name === "robotCleaner") return dev.status === "start";
+  return false;
+}
+
+// ============================================================
+// 九、单个房间卡片
+// ============================================================
+function RoomCard({ title, icon: Icon, devices, accent = "cyan" }) {
+  // devices: [{ key, name, dev }]
+  const accentMap = {
+    cyan:    "from-cyan-500/15 to-cyan-500/5 border-cyan-400/40",
+    blue:    "from-blue-500/15 to-blue-500/5 border-blue-400/40",
+    purple:  "from-purple-500/15 to-purple-500/5 border-purple-400/40",
+    rose:    "from-rose-500/15 to-rose-500/5 border-rose-400/40",
+    emerald: "from-emerald-500/15 to-emerald-500/5 border-emerald-400/40",
+    amber:   "from-amber-500/15 to-amber-500/5 border-amber-400/40",
+  };
+  return (
+    <motion.div
+      layout
+      className={`relative p-4 rounded-2xl border bg-gradient-to-br ${accentMap[accent]}
+                  backdrop-blur-md shadow-[0_4px_20px_rgba(0,0,0,.3)]`}
+    >
+      <div className="flex items-center gap-2 mb-3">
+        {Icon && <Icon className="w-4 h-4 text-cyan-300" />}
+        <h3 className="text-sm font-semibold tracking-wide text-cyan-100">{title}</h3>
+      </div>
+      <div className="space-y-1.5">
+        {devices.map(({ key, name, dev }) => {
+          const active = isDeviceActive(name, dev);
+          const DevIcon = DEVICE_ICON[name] ?? Sparkles;
+          return (
+            <motion.div
+              key={key}
+              animate={{
+                backgroundColor: active ? "rgba(6,182,212,.12)" : "rgba(255,255,255,.02)",
+                borderColor:     active ? "rgba(6,182,212,.45)" : "rgba(255,255,255,.06)",
+              }}
+              className="flex items-center justify-between px-2.5 py-1.5 rounded-lg border text-xs hover:border-cyan-300/40 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <DevIcon className={`w-3.5 h-3.5 ${active ? "text-cyan-300" : "text-slate-500"}`} />
+                <span className={active ? "text-cyan-100" : "text-slate-400"}>
+                  {DEVICE_CN[name] ?? name}
+                </span>
+              </div>
+              <span className={`font-mono ${active ? "text-cyan-200" : "text-slate-500"}`}>
+                {formatDevice(name, dev)}
+              </span>
+            </motion.div>
+          );
+        })}
+      </div>
+    </motion.div>
+  );
+}
+
+// ============================================================
+// 十、3D 立体房屋
+// 用 CSS perspective + rotate 模拟等距视图，每个房间为半透明发光块
+// ============================================================
+function House3D({ state }) {
+  const r = state.rooms;
+  return (
+    <div className="relative w-full h-full" style={{ perspective: "1800px" }}>
+      <div
+        className="relative w-full h-full"
+        style={{
+          transform: "rotateX(48deg) rotateZ(-32deg) scale(.92)",
+          transformStyle: "preserve-3d",
+          transformOrigin: "50% 55%",
+        }}
+      >
+        {/* 地板 */}
+        <div className="absolute inset-[10%] rounded-2xl bg-gradient-to-br from-cyan-900/30 via-indigo-900/20 to-slate-900/30 border border-cyan-400/30 shadow-[inset_0_0_60px_rgba(6,182,212,.15)]" />
+
+        {/* 主卧 */}
+        <RoomZone
+          name="主卧"
+          style={{ left: "12%", top: "12%", width: "32%", height: "32%" }}
+          glow={glowOf(r.主卧)}
+          devices={r.主卧}
+        />
+        {/* 次卧 */}
+        <RoomZone
+          name="次卧"
+          style={{ left: "55%", top: "12%", width: "33%", height: "30%" }}
+          glow={glowOf(r.次卧)}
+          devices={r.次卧}
+        />
+        {/* 客厅 */}
+        <RoomZone
+          name="客厅"
+          style={{ left: "12%", top: "44%", width: "40%", height: "36%" }}
+          glow={glowOf(r.客厅)}
+          devices={r.客厅}
+          big
+        />
+        {/* 儿童房 */}
+        <RoomZone
+          name="儿童房"
+          style={{ left: "55%", top: "42%", width: "20%", height: "32%" }}
+          glow={glowOf(r.儿童房)}
+          devices={r.儿童房}
+        />
+        {/* 厨房 */}
+        <RoomZone
+          name="厨房"
+          style={{ left: "76%", top: "42%", width: "15%", height: "32%" }}
+          glow={glowOf(r.厨房)}
+          devices={r.厨房}
+        />
+
+        {/* 入户门（地板下方门廊） */}
+        <DoorMark
+          status={state.doorLock.status}
+          style={{ left: "44%", top: "82%", width: "12%", height: "8%" }}
+        />
+        {/* 燃气阀指示 */}
+        <SafetyMark
+          icon={Flame}
+          active={state.gasValve.status === "open"}
+          dangerColor="bg-rose-500/40 border-rose-400 shadow-[0_0_20px_rgba(244,63,94,.7)]"
+          safeColor="bg-emerald-500/15 border-emerald-400/50"
+          style={{ left: "85%", top: "76%" }}
+          label={state.gasValve.status === "open" ? "燃气开" : "燃气关"}
+        />
+        {/* 扫地机 */}
+        <RobotMark
+          active={state.robotCleaner.status === "start"}
+          style={{ left: "30%", top: "70%" }}
+        />
+      </div>
+
+      {/* 智能中枢徽标 */}
+      <div className="absolute top-3 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-full
+                       bg-cyan-400/15 border border-cyan-300/40 backdrop-blur
+                       text-cyan-100 text-xs flex items-center gap-1.5
+                       shadow-[0_0_18px_rgba(6,182,212,.3)]">
+        <Activity className="w-3.5 h-3.5" />
+        <span>智能中枢 · HomeCare-Agent</span>
+      </div>
+    </div>
+  );
+}
+
+// 计算房间整体光晕颜色
+function glowOf(rooms) {
+  if (!rooms) return null;
+  const lightOn = rooms.light?.brightness > 0;
+  const acOn    = rooms.ac?.power === "on";
+  if (lightOn && acOn) return "amber+blue";
+  if (lightOn) return "amber";
+  if (acOn)    return "blue";
+  return null;
+}
+
+// ============================================================
+// 十一、单个房间块（House3D 的子组件）
+// ============================================================
+function RoomZone({ name, style, glow, devices, big }) {
+  const lightOn = devices?.light?.brightness > 0;
+  const acOn    = devices?.ac?.power === "on";
+  const tvOn    = devices?.tv?.power === "on";
+  const spOn    = devices?.speaker?.power === "on";
+  const apOn    = devices?.airPurifier?.power === "on";
+  const humOn   = devices?.humidifier?.power === "on";
+  const curtainOpen = devices?.curtain?.status === "opened";
+
+  const lightAlpha = (devices?.light?.brightness ?? 0) / 100;
+
+  return (
+    <div
+      className="absolute rounded-2xl border-2 transition-all duration-500"
+      style={{
+        ...style,
+        borderColor: lightOn ? "rgba(255,200,100,.7)" : "rgba(120,180,220,.35)",
+        background: lightOn
+          ? `radial-gradient(circle at 50% 50%, rgba(255,200,100,${0.15 + lightAlpha*0.35}), rgba(255,200,100,0.06))`
+          : "rgba(15,23,42,.45)",
+        boxShadow: lightOn
+          ? `0 0 ${20 + lightAlpha*30}px rgba(255,200,100,${0.4 + lightAlpha*0.4}),
+             inset 0 0 30px rgba(255,200,100,${0.15 + lightAlpha*0.25})`
+          : "inset 0 0 20px rgba(0,0,0,.4)",
+        backdropFilter: "blur(2px)",
+      }}
+    >
+      {/* 房间名 */}
+      <div className="absolute -top-6 left-2 text-xs text-cyan-200/80 font-medium tracking-widest"
+           style={{ transform: "rotateZ(32deg) rotateX(-48deg)" }}>
+        {name}
+      </div>
+
+      {/* 灯（顶部圆形） */}
+      <motion.div
+        className="absolute top-2 left-1/2 -translate-x-1/2 rounded-full"
+        animate={{
+          width: lightOn ? 14 : 10,
+          height: lightOn ? 14 : 10,
+          backgroundColor: lightOn ? "rgba(255,220,150,.95)" : "rgba(120,140,180,.4)",
+          boxShadow: lightOn ? `0 0 ${20+lightAlpha*30}px rgba(255,220,150,.9)` : "none",
+        }}
+      />
+
+      {/* 空调 */}
+      {devices?.ac && (
+        <div className="absolute top-3 right-3 flex flex-col items-center">
+          <div className={`w-8 h-2 rounded-sm transition-colors duration-500 ${
+            acOn ? "bg-blue-400/80 shadow-[0_0_10px_rgba(96,165,250,.7)]" : "bg-slate-600/50"
+          }`} />
+          {acOn && (
+            <>
+              {[0,1,2].map(i => (
+                <motion.div
+                  key={i}
+                  className="absolute top-3 w-6 h-0.5 bg-blue-300/60 rounded"
+                  initial={{ y: 0, opacity: 0 }}
+                  animate={{ y: [0, 18, 36], opacity: [0,1,0] }}
+                  transition={{ duration: 2, repeat: Infinity, delay: i*0.6 }}
+                />
+              ))}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* 窗帘 */}
+      {devices?.curtain && (
+        <div className="absolute bottom-3 left-2 flex items-end gap-0.5 h-4">
+          {[0,1,2,3,4].map(i => (
+            <motion.div
+              key={i}
+              animate={{ height: curtainOpen ? "30%" : "100%" }}
+              className={`w-1 rounded-t ${curtainOpen ? "bg-cyan-400/40" : "bg-slate-300/70"}`}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* 电视 */}
+      {devices?.tv && (
+        <div className={`absolute bottom-3 right-3 w-10 h-6 rounded border transition-all duration-500 ${
+          tvOn ? "bg-cyan-400/40 border-cyan-300 shadow-[0_0_15px_rgba(34,211,238,.7)]" : "bg-slate-800/60 border-slate-600"
+        }`}>
+          {tvOn && (
+            <motion.div
+              className="absolute inset-1 rounded-sm bg-gradient-to-br from-cyan-200/50 to-blue-300/30"
+              animate={{ opacity: [0.4, 0.9, 0.4] }}
+              transition={{ duration: 1.4, repeat: Infinity }}
+            />
+          )}
+        </div>
+      )}
+
+      {/* 音响 */}
+      {devices?.speaker && (
+        <div className="absolute top-1/2 right-2 -translate-y-1/2">
+          <Speaker className={`w-4 h-4 ${spOn ? "text-purple-300" : "text-slate-500"}`} />
+          {spOn && (
+            <motion.div
+              className="absolute inset-0 rounded-full border border-purple-300/60"
+              animate={{ scale: [1, 1.6], opacity: [0.7, 0] }}
+              transition={{ duration: 1.5, repeat: Infinity }}
+            />
+          )}
+        </div>
+      )}
+
+      {/* 净化器（厨房） */}
+      {devices?.airPurifier && (
+        <div className="absolute bottom-2 left-2">
+          <AirVent className={`w-4 h-4 ${apOn ? "text-emerald-300" : "text-slate-500"}`} />
+          {apOn && (
+            <motion.div
+              className="absolute -inset-1 rounded-full border border-emerald-300/40"
+              animate={{ scale: [0.8, 1.4], opacity: [0.6, 0] }}
+              transition={{ duration: 1.8, repeat: Infinity }}
+            />
+          )}
+        </div>
+      )}
+
+      {/* 加湿器（厨房） */}
+      {devices?.humidifier && (
+        <div className="absolute bottom-2 right-2">
+          <Droplets className={`w-4 h-4 ${humOn ? "text-cyan-300" : "text-slate-500"}`} />
+          {humOn &&
+            <motion.div
+              className="absolute -top-2 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-cyan-200"
+              animate={{ y: [-4, -12], opacity: [0.8, 0], scale: [1, 1.6] }}
+              transition={{ duration: 2, repeat: Infinity }}
+            />
+          }
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// 十二、入户门 / 燃气阀 / 扫地机
+// ============================================================
+function DoorMark({ status, style }) {
+  const unlocked = status === "unlocked";
+  return (
+    <div
+      className="absolute flex items-center justify-center rounded-md border transition-all duration-500"
+      style={{
+        ...style,
+        borderColor: unlocked ? "rgba(251,146,60,.85)" : "rgba(96,165,250,.55)",
+        background: unlocked ? "rgba(251,146,60,.18)" : "rgba(15,23,42,.45)",
+        boxShadow: unlocked ? "0 0 18px rgba(251,146,60,.55)" : "none",
+      }}
+    >
+      {unlocked
+        ? <Unlock className="w-4 h-4 text-orange-300" />
+        : <Lock   className="w-4 h-4 text-cyan-300" />}
+    </div>
+  );
+}
+
+function SafetyMark({ icon: Icon, active, dangerColor, safeColor, style, label }) {
+  return (
+    <motion.div
+      className={`absolute w-9 h-9 rounded-full border flex flex-col items-center justify-center
+                   ${active ? dangerColor : safeColor}`}
+      style={style}
+      animate={active ? { scale: [1, 1.15, 1] } : { scale: 1 }}
+      transition={{ duration: 0.9, repeat: active ? Infinity : 0 }}
+      title={label}
+    >
+      <Icon className={`w-4 h-4 ${active ? "text-rose-100" : "text-emerald-300"}`} />
+    </motion.div>
+  );
+}
+
+function RobotMark({ active, style }) {
+  return (
+    <motion.div
+      className="absolute w-7 h-7 rounded-full flex items-center justify-center border
+                  bg-slate-800/60"
+      style={{
+        ...style,
+        borderColor: active ? "rgba(34,211,238,.7)" : "rgba(120,140,170,.3)",
+        boxShadow: active ? "0 0 14px rgba(34,211,238,.6)" : "none",
+      }}
+      animate={active ? { rotate: 360, x: [0, 30, 0, -30, 0] } : { rotate: 0 }}
+      transition={active ? { rotate: { duration: 4, repeat: Infinity, ease: "linear" },
+                              x:      { duration: 8, repeat: Infinity, ease: "easeInOut" } } : {}}
+    >
+      <Bot className={`w-4 h-4 ${active ? "text-cyan-300" : "text-slate-500"}`} />
+    </motion.div>
+  );
+}
+
+// ============================================================
+// 十三、安全裁决横幅
+// ============================================================
+function SafetyBanner({ pending, onConfirm, onCancel }) {
+  if (!pending) return null;
+  const { actions, verdicts } = pending;
+  const high = verdicts.includes("high");
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
+      className={`p-4 rounded-2xl border flex items-start justify-between gap-4 mb-4
+                   ${high ? "bg-rose-500/10 border-rose-400/50" : "bg-amber-500/10 border-amber-400/50"}`}
+    >
+      <div className="flex items-start gap-3">
+        <AlertTriangle className={`w-5 h-5 mt-0.5 ${high ? "text-rose-300" : "text-amber-300"}`} />
+        <div>
+          <div className={`font-semibold ${high ? "text-rose-100" : "text-amber-100"}`}>
+            需要二次确认（{high ? "高风险" : "中风险"}）
+          </div>
+          <div className="text-sm text-slate-300 mt-1">
+            待执行：{actions.map(a => `${DEVICE_CN[a.device]}${a.action === "unlock" ? " 解锁" : a.action === "open" ? " 打开" : ""}`).join("、")}
+          </div>
+        </div>
+      </div>
+      <div className="flex gap-2 shrink-0">
+        <button onClick={onConfirm}
+                className="px-4 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30
+                            border border-emerald-400/60 text-emerald-100 text-sm flex items-center gap-1.5">
+          <CheckCircle2 className="w-4 h-4"/> 确认
+        </button>
+        <button onClick={onCancel}
+                className="px-4 py-1.5 rounded-lg bg-slate-500/15 hover:bg-slate-500/25
+                            border border-slate-400/40 text-slate-200 text-sm flex items-center gap-1.5">
+          <XCircle className="w-4 h-4"/> 取消
+        </button>
+      </div>
+    </motion.div>
+  );
+}
+
+// ============================================================
+// 十四、主组件
+// ============================================================
+export default function SmartHomeDemo() {
+  const [state, setState] = useState(INITIAL_STATE);
+  const [input, setInput] = useState("");
+  const [reply, setReply] = useState("欢迎来到 HomeCare-Agent，请用自然语言对家说点什么。");
+  const [logs, setLogs] = useState([]);
+  const [pending, setPending] = useState(null);
+
+  // 提交指令
+  const handleSubmit = useCallback((rawText) => {
+    const text = (rawText ?? input).trim();
+    if (!text) return;
+    setInput("");
+
+    const actions = parseCommand(text);
+    if (actions.length === 0) {
+      setReply("抱歉我没听懂，能换个说法吗？");
+      setLogs(L => [{ time: now(), input: text, intent: "unknown", reply: "未识别意图" }, ...L].slice(0, 30));
+      return;
+    }
+    const verdicts = actions.map(decideSafety);
+    const needConfirm = verdicts.some(v => v === "medium" || v === "high");
+
+    if (needConfirm) {
+      setPending({ text, actions, verdicts });
+      const a = actions[0];
+      setReply(`检测到 ${verdicts.includes("high") ? "高风险" : "中风险"} 操作（${DEVICE_CN[a.device]}），请点击「确认」执行，或点击「取消」终止。`);
+      setLogs(L => [{ time: now(), input: text, intent: a.device, reply: "等待二次确认", safety: verdicts.join(",") }, ...L].slice(0, 30));
+    } else {
+      const newState = actions.reduce((s, a) => executeAction(s, a), state);
+      setState(newState);
+      const summary = actions.map(a => describeAction(a)).join("、");
+      setReply(`已为您完成：${summary}`);
+      setLogs(L => [{ time: now(), input: text, intent: actions[0].device, reply: summary, safety: "low" }, ...L].slice(0, 30));
+    }
+  }, [input, state]);
+
+  // 二次确认
+  const onConfirm = useCallback(() => {
+    if (!pending) return;
+    const newState = pending.actions.reduce((s, a) => executeAction(s, a), state);
+    setState(newState);
+    const summary = pending.actions.map(a => describeAction(a)).join("、");
+    setReply(`已确认并执行：${summary}`);
+    setLogs(L => [{ time: now(), input: "(确认)", intent: pending.actions[0].device, reply: summary, safety: "confirmed" }, ...L].slice(0, 30));
+    setPending(null);
+  }, [pending, state]);
+
+  const onCancel = useCallback(() => {
+    setReply("已取消上一步操作。");
+    setLogs(L => [{ time: now(), input: "(取消)", intent: "cancel", reply: "用户取消" }, ...L].slice(0, 30));
+    setPending(null);
+  }, []);
+
+  // 卡片数据计算
+  const cards = useMemo(() => {
+    const r = state.rooms;
+    return {
+      主卧:   [{ key:"主卧.light",  name:"light",  dev:r.主卧.light },
+                 { key:"主卧.ac",     name:"ac",     dev:r.主卧.ac },
+                 { key:"主卧.curtain",name:"curtain",dev:r.主卧.curtain }],
+      次卧:   [{ key:"次卧.light",  name:"light",  dev:r.次卧.light },
+                 { key:"次卧.ac",     name:"ac",     dev:r.次卧.ac }],
+      客厅:   [{ key:"客厅.light",  name:"light",  dev:r.客厅.light },
+                 { key:"客厅.ac",     name:"ac",     dev:r.客厅.ac },
+                 { key:"客厅.curtain",name:"curtain",dev:r.客厅.curtain },
+                 { key:"客厅.tv",     name:"tv",     dev:r.客厅.tv },
+                 { key:"客厅.speaker",name:"speaker",dev:r.客厅.speaker }],
+      儿童房: [{ key:"儿童房.light", name:"light",  dev:r.儿童房.light },
+                 { key:"儿童房.ac",    name:"ac",     dev:r.儿童房.ac }],
+      厨房:   [{ key:"厨房.light",  name:"light",  dev:r.厨房.light },
+                 { key:"厨房.ap",     name:"airPurifier", dev:r.厨房.airPurifier },
+                 { key:"厨房.hum",    name:"humidifier",  dev:r.厨房.humidifier }],
+    };
+  }, [state]);
+
+  // 全屋安全
+  const securityCard = [
+    { key:"sec.door",  name:"doorLock",     dev:state.doorLock },
+    { key:"sec.gas",   name:"gasValve",     dev:state.gasValve },
+    { key:"sec.robot", name:"robotCleaner", dev:state.robotCleaner },
+  ];
+
+  // 全屋汇总
+  const wholeHouseCard = useMemo(() => {
+    const r = state.rooms;
+    const anyLight = Object.values(r).some(rm => rm.light?.brightness > 0);
+    const anyAC    = Object.values(r).some(rm => rm.ac?.power === "on");
+    return [
+      { key:"全屋.light", name:"light", dev:{ brightness: anyLight ? "部分" : 0 }},
+      { key:"全屋.ac",    name:"ac",    dev:{ power: anyAC ? "on" : "off", temp: 26, mode:"auto" }},
+    ];
+  }, [state]);
+
+  const quickCmds = [
+    "我准备睡觉了", "打开主卧空调", "关闭主卧空调",
+    "我在主卧室，调低空调温度5°C", "打开厨房的灯",
+    "把客厅灯调到80%", "开启扫地机器人", "停止扫地机器人",
+    "解锁入户门", "我刚到家", "厨房闻到煤气味了",
+  ];
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-950 text-slate-100 p-5">
+      {/* 顶部 */}
+      <div className="flex items-center justify-between mb-5">
+        <div className="flex items-center gap-3">
+          <Home className="w-7 h-7 text-cyan-300" />
+          <h1 className="text-2xl font-bold tracking-wider bg-gradient-to-r from-cyan-200 to-blue-300 bg-clip-text text-transparent">
+            HomeCare-Agent · 端侧家庭智能体
+          </h1>
+        </div>
+        <div className="flex items-center gap-2 text-xs">
+          <span className="px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-400/40 text-emerald-300">L3 LLM 就绪</span>
+          <span className="px-2.5 py-1 rounded-full bg-cyan-500/15   border border-cyan-400/40   text-cyan-300">本地推理 · 零云端</span>
+          <span className="px-2.5 py-1 rounded-full bg-purple-500/15 border border-purple-400/40 text-purple-300">三层意图识别</span>
+        </div>
+      </div>
+
+      {/* 主体三栏 */}
+      <div className="grid grid-cols-12 gap-4">
+        {/* 左侧卡片 */}
+        <div className="col-span-3 space-y-3">
+          <RoomCard title="🛋️ 客厅"   icon={Home}      devices={cards.客厅}   accent="cyan" />
+          <RoomCard title="🛏️ 主卧"   icon={Moon}      devices={cards.主卧}   accent="blue" />
+          <RoomCard title="🏠 全屋"   icon={Sparkles}  devices={wholeHouseCard} accent="purple" />
+        </div>
+
+        {/* 中间 3D 房屋 */}
+        <div className="col-span-6">
+          <div className="relative h-[640px] rounded-2xl border border-cyan-400/30
+                            bg-slate-900/40 overflow-hidden
+                            shadow-[0_8px_40px_rgba(6,182,212,.15)]">
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(99,102,241,.15),transparent_60%)] pointer-events-none" />
+            <House3D state={state} />
+          </div>
+        </div>
+
+        {/* 右侧卡片 */}
+        <div className="col-span-3 space-y-3">
+          <RoomCard title="🛌 次卧"        icon={Moon}    devices={cards.次卧}    accent="rose" />
+          <RoomCard title="🧒 儿童房"      icon={Sparkles} devices={cards.儿童房}  accent="emerald" />
+          <RoomCard title="🍳 厨房"        icon={Wind}    devices={cards.厨房}    accent="amber" />
+          <RoomCard title="🛡️ 全屋安全"    icon={Lock}    devices={securityCard}  accent="cyan" />
+        </div>
+      </div>
+
+      {/* 底部输入栏 */}
+      <div className="mt-5 grid grid-cols-12 gap-4">
+        <div className="col-span-8 space-y-3">
+          <SafetyBanner pending={pending} onConfirm={onConfirm} onCancel={onCancel} />
+
+          <div className="rounded-2xl border border-cyan-400/30 bg-slate-900/50 backdrop-blur p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <input
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && handleSubmit()}
+                placeholder="对智能家居说点什么…例如『关闭主卧空调』『把客厅灯调到80%』"
+                className="flex-1 px-4 py-3 rounded-xl bg-slate-800/60 border border-cyan-400/30
+                            text-slate-100 placeholder-slate-500 outline-none
+                            focus:border-cyan-300 focus:ring-2 focus:ring-cyan-400/30 transition"
+              />
+              <button onClick={() => handleSubmit()}
+                      className="px-5 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500
+                                  hover:from-cyan-400 hover:to-blue-400 text-white font-semibold
+                                  shadow-[0_4px_20px_rgba(6,182,212,.4)] flex items-center gap-2">
+                <Send className="w-4 h-4"/> 提交
+              </button>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {quickCmds.map(c => (
+                <button key={c} onClick={() => handleSubmit(c)}
+                        className="px-3 py-1 text-xs rounded-full bg-cyan-400/10 hover:bg-cyan-400/20
+                                    border border-cyan-300/30 text-cyan-200 transition">
+                  {c}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-cyan-400/30 bg-slate-900/50 p-4 min-h-[80px]">
+            <div className="text-xs text-cyan-300 mb-1.5 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5"/> Agent 回复
+            </div>
+            <AnimatePresence mode="wait">
+              <motion.div key={reply}
+                          initial={{opacity:0,y:6}} animate={{opacity:1,y:0}} exit={{opacity:0}}
+                          className="text-slate-100">
+                {reply}
+              </motion.div>
+            </AnimatePresence>
+          </div>
+        </div>
+
+        {/* 执行日志 */}
+        <div className="col-span-4 rounded-2xl border border-cyan-400/30 bg-slate-900/50 p-4
+                          max-h-[420px] overflow-auto">
+          <div className="text-xs text-cyan-300 mb-2 flex items-center gap-1.5">
+            <Activity className="w-3.5 h-3.5"/> 执行日志
+          </div>
+          {logs.length === 0
+            ? <div className="text-xs text-slate-500">暂无记录…</div>
+            : (
+              <div className="space-y-2">
+                {logs.map((l, i) => (
+                  <div key={i} className="text-xs border-l-2 border-cyan-400/30 pl-2">
+                    <div className="text-slate-500">{l.time}</div>
+                    <div className="text-cyan-100">▸ {l.input}</div>
+                    <div className="text-slate-400">→ {l.reply}
+                      {l.safety && <span className={`ml-2 px-1.5 py-0.5 rounded text-[10px] ${
+                        l.safety === "low" ? "bg-emerald-500/20 text-emerald-300"
+                        : l.safety === "confirmed" ? "bg-cyan-500/20 text-cyan-300"
+                        : "bg-amber-500/20 text-amber-300"
+                      }`}>{l.safety}</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// 工具函数
+// ============================================================
+function now() {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}:${String(d.getSeconds()).padStart(2,"0")}`;
+}
+
+function describeAction(a) {
+  const target = a.room ? `${a.room}` : "";
+  const dev = DEVICE_CN[a.device] || a.device;
+  if (a.device === "doorLock")     return `入户门 ${a.action === "unlock" ? "已解锁" : "已锁"}`;
+  if (a.device === "gasValve")     return `燃气阀 ${a.action === "open" ? "已开" : "已关"}`;
+  if (a.device === "robotCleaner") return `扫地机 ${a.action}`;
+  if (a.device === "ac" && (a.action === "set" || a.action === "up" || a.action === "down")) {
+    return `${target}空调 ${a.action === "set" ? `设为${a.value}°C` : a.action === "up" ? `升${a.value??1}°C` : `降${a.value??1}°C`}`;
+  }
+  if (a.device === "light" && a.action === "set") return `${target}灯 调至 ${a.value}%`;
+  if (a.action === "on")  return `${target}${dev} 打开`;
+  if (a.action === "off") return `${target}${dev} 关闭`;
+  return `${target}${dev} ${a.action}`;
+}

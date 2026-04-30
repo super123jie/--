@@ -21,6 +21,9 @@ if str(_ROOT) not in sys.path:
 from main import run  # noqa: E402
 from src.memory import new_session_id, ensure_defaults, reset_all  # noqa: E402
 from src import llm as _llm  # noqa: E402
+from src.floorplan_layout import HOTSPOTS, COLOR_MAP, resolve_hotspot_state  # noqa: E402
+
+import base64
 
 try:
     from streamlit_mic_recorder import speech_to_text
@@ -200,6 +203,125 @@ div[data-testid="stExpander"]{
 }
 
 footer{ visibility: hidden; }
+
+/* ===== 3D 户型图 + 设备热点 ===== */
+.floorplan-wrap{
+    position: relative;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    border-radius: 18px;
+    overflow: hidden;
+    background: rgba(255,255,255,.02);
+    border: 1px solid rgba(124,92,255,.30);
+    box-shadow: 0 8px 32px rgba(15,18,38,.35),
+                inset 0 0 60px rgba(124,92,255,.06);
+    margin-bottom: 1rem;
+}
+.floorplan-bg{
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+    opacity: .72;
+    filter: saturate(.85) brightness(.92);
+    pointer-events: none;
+    user-select: none;
+}
+.floorplan-overlay{
+    position: absolute; inset: 0;
+    background: linear-gradient(135deg, rgba(15,18,38,.10), rgba(124,92,255,.06));
+    pointer-events: none;
+}
+.hotspot{
+    position: absolute;
+    width: 38px; height: 38px;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+    background: rgba(20,22,50,.55);
+    border: 1.5px solid rgba(180,200,230,.30);
+    box-shadow: 0 2px 8px rgba(0,0,0,.35);
+    transition: all .35s cubic-bezier(.4,0,.2,1);
+    backdrop-filter: blur(4px);
+    cursor: default;
+    z-index: 5;
+}
+.hotspot.on{
+    background: var(--glow-bg, rgba(255,200,100,.35));
+    border-color: var(--glow-color, rgba(255,200,100,.95));
+    box-shadow: 0 0 18px var(--glow-color, rgba(255,200,100,.85)),
+                0 0 36px var(--glow-color, rgba(255,200,100,.45)),
+                0 0 60px var(--glow-color, rgba(255,200,100,.20));
+    transform: translate(-50%, -50%) scale(1.18);
+    animation: pulse 2.4s ease-in-out infinite;
+}
+@keyframes pulse{
+    0%, 100% { transform: translate(-50%, -50%) scale(1.18); }
+    50%      { transform: translate(-50%, -50%) scale(1.30); }
+}
+.hotspot-label{
+    position: absolute; top: 110%; left: 50%;
+    transform: translateX(-50%);
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+    background: rgba(15,18,38,.92);
+    padding: 3px 8px;
+    border-radius: 6px;
+    color: var(--muted);
+    pointer-events: none;
+    box-shadow: 0 2px 6px rgba(0,0,0,.4);
+    letter-spacing: .5px;
+}
+.hotspot.on .hotspot-label{
+    color: var(--glow-color);
+    border: 1px solid var(--glow-color);
+    background: rgba(15,18,38,.96);
+}
+.floorplan-legend{
+    position: absolute;
+    right: 12px; top: 12px;
+    background: rgba(15,18,38,.78);
+    border: 1px solid rgba(255,255,255,.10);
+    border-radius: 10px;
+    padding: 8px 12px;
+    font-size: 11px;
+    color: var(--muted);
+    backdrop-filter: blur(8px);
+    pointer-events: none;
+    z-index: 6;
+}
+.floorplan-legend b{ color: var(--primary-soft); display: block; margin-bottom: 4px; font-size: 12px;}
+.floorplan-legend span{ display: inline-block; margin-right: 8px;}
+
+/* 紧凑版下方状态条 */
+.compact-room{
+    padding: .7rem .9rem;
+    border-radius: 12px;
+    background: rgba(255,255,255,.03);
+    border: 1px solid rgba(255,255,255,.06);
+    margin-bottom: .55rem;
+}
+.compact-room h5{
+    margin: 0 0 .4rem 0;
+    font-size: .92rem;
+    color: var(--primary-soft);
+}
+.compact-room .chip{
+    display: inline-block;
+    margin: 2px 6px 2px 0;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: .76rem;
+    background: rgba(255,255,255,.04);
+    border: 1px solid rgba(255,255,255,.08);
+    color: var(--muted);
+}
+.compact-room .chip.on{
+    background: rgba(61,220,151,.10);
+    border-color: rgba(61,220,151,.45);
+    color: var(--ok);
+}
 </style>
 """
 st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
@@ -259,25 +381,102 @@ def _device_tile_html(name: str, info: dict) -> str:
             f"<span class='device-meta'>{meta}</span></div>")
 
 
+@st.cache_data(show_spinner=False)
+def _bg_b64() -> str:
+    """加载背景户型图为 base64 内嵌（避开 Streamlit 静态目录限制）。"""
+    p = _ROOT / "static" / "bg_floorplan.png"
+    if not p.exists():
+        return ""
+    return base64.b64encode(p.read_bytes()).decode("ascii")
+
+
 def _render_state(state: dict):
-    cols = st.columns(3)
+    """3D 户型图 + 设备热点联动版状态渲染。"""
+    bg = _bg_b64()
+    spots_html: list[str] = []
+
+    for key, pos in HOTSPOTS.items():
+        on, label = resolve_hotspot_state(key, state)
+        glow_color = COLOR_MAP[pos["color"]] if on else COLOR_MAP["off"]
+        glow_bg = glow_color.replace("0.85", "0.30").replace("0.90", "0.30") \
+                              .replace("0.80", "0.25").replace("0.70", "0.25")
+        klass = "hotspot on" if on else "hotspot"
+        spots_html.append(
+            f'<div class="{klass}" '
+            f'style="left:{pos["x"]}%;top:{pos["y"]}%;'
+            f'--glow-color:{glow_color};--glow-bg:{glow_bg};">'
+            f'{pos["icon"]}'
+            f'<span class="hotspot-label">{pos["label_zh"]} · {label}</span>'
+            f'</div>'
+        )
+
+    legend_html = (
+        '<div class="floorplan-legend">'
+        '<b>设备状态</b>'
+        '<span>🟡 灯</span><span>🔵 空调</span><span>🟣 音响</span>'
+        '<span>🔐 门锁</span><span>🔥 燃气</span>'
+        '</div>'
+    )
+
+    bg_img = (f'<img class="floorplan-bg" src="data:image/png;base64,{bg}" />'
+               if bg else
+               '<div class="floorplan-bg" style="background:linear-gradient(135deg,#1a1d3a,#252a52);"></div>')
+
+    st.markdown(
+        f'<div class="floorplan-wrap">'
+        f'{bg_img}'
+        f'<div class="floorplan-overlay"></div>'
+        f'{legend_html}'
+        f'{"".join(spots_html)}'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+    # 紧凑版状态条（每个房间一行）
+    _render_state_compact(state)
+
+
+def _render_state_compact(state: dict):
+    """紧凑版每房间状态条，用 chip 列表，避免占用太多垂直空间。"""
     rooms = list(state.get("rooms", {}).items())
+    cols = st.columns(min(max(len(rooms), 1), 5))
     for i, (room, info) in enumerate(rooms):
-        with cols[i % 3]:
-            tiles = "".join(_device_tile_html(n, d) for n, d in info.get("devices", {}).items())
+        with cols[i % len(cols)]:
+            chips: list[str] = []
+            for n, d in info.get("devices", {}).items():
+                cn = CN_NAMES.get(n, n)
+                icon = ICONS.get(n, "•")
+                on = (d.get("power") == "on" or
+                      d.get("status") in ("opened", "unlocked", "start"))
+                # 取关键值
+                if n == "ac" and on:
+                    extra = f" {d.get('temp', '-')}℃"
+                elif n == "light" and on:
+                    extra = f" {d.get('brightness', 0)}%"
+                else:
+                    extra = ""
+                klass = "chip on" if on else "chip"
+                chips.append(f"<span class='{klass}'>{icon} {cn}{extra}</span>")
             st.markdown(
-                f"<div class='card'><h4>🏠 {room}</h4>{tiles}</div>",
+                f"<div class='compact-room'><h5>🏠 {room}</h5>{''.join(chips)}</div>",
                 unsafe_allow_html=True)
-    # 全屋安全设备
+
+    # 全屋安全单独一行
     door = state.get("door_lock", {}).get("status", "-")
     gas = state.get("gas_valve", {}).get("status", "-")
     robot = state.get("robot_cleaner", {}).get("status", "-")
+    door_on = door == "unlocked"
+    gas_on = gas == "open"
+    robot_on = robot in ("start", "running")
     st.markdown(
-        f"""<div class='card'><h4>🛡️ 全屋安全</h4>
-        <span class='metric-pill'>🔐 入户门: {door}</span>
-        <span class='metric-pill'>🔥 燃气阀: {gas}</span>
-        <span class='metric-pill'>🤖 扫地机: {robot}</span>
-        </div>""", unsafe_allow_html=True)
+        f"<div class='compact-room' style='margin-top:.6rem;'>"
+        f"<h5>🛡️ 全屋安全</h5>"
+        f"<span class='chip {'on' if door_on else ''}'>🔐 入户门: {door}</span>"
+        f"<span class='chip {'on' if gas_on else ''}'>🔥 燃气阀: {gas}</span>"
+        f"<span class='chip {'on' if robot_on else ''}'>🤖 扫地机: {robot}</span>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
 
 
 def _render_plan(plan: list):

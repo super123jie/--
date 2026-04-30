@@ -40,7 +40,11 @@
       "Bash(PYTHONIOENCODING=utf-8 venv/Scripts/python.exe algorithm/tests/run_external_test.py)",
       "Bash(python _append_v5.py)",
       "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" http://localhost:8501/)",
-      "Bash(taskkill //F //IM streamlit.exe)"
+      "Bash(taskkill //F //IM streamlit.exe)",
+      "Bash(PYTHONIOENCODING=utf-8 venv/Scripts/python.exe algorithm/scripts/process_bg.py)",
+      "Bash(python -m http.server 8200)",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" http://localhost:8200/)",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" http://localhost:8200/SmartHomeDemo.jsx)"
     ]
   }
 }
